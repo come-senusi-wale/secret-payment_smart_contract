@@ -1,0 +1,4 @@
+/target
+/node/node_modules
+/node/.env
+/node/contract.js
