@@ -58,8 +58,8 @@ let upload_contract = async () => {
   
 //upload_contract();
 
-let codeId = 21027;
-let contractCodeHash = '08c6275403f7d4a0112d870f48c656fd7a9399c868bcd0e544a2bba246ed8127';
+let codeId = 21044;
+let contractCodeHash = 'add0d4c751f7503a564031dab3b31007c696382d732c88fb95d4d07aee4c5fc8';
 
 let instantiate_contract = async () => {
     // Create an instance of the Counter contract, providing a starting count
@@ -89,7 +89,7 @@ let instantiate_contract = async () => {
   
 //instantiate_contract();
 
-let contract_address = 'secret14ysp0qae04tq0mkndm89ur3e0rznjywmjvstp8';
+let contract_address = 'secret17hxzcy4y8aznjsjlv6l33tk4fql5fcsl9zccjm';
 
 // for query single invoice
 let try_query_single_invoice = async (id) => {
@@ -215,7 +215,7 @@ let accept_invoice = async (id) => {
           },
       
           sender: wallet.address,
-          sentFunds: [{ denom: "uscrt", amount: "10000000" }],
+          sent_funds: [{ denom: "uscrt", amount: "10" }]
         },
         {
           gasLimit: 100_000,
@@ -234,7 +234,7 @@ let accept_invoice = async (id) => {
     try {
       let tx = await secretjs.tx.compute.executeContract(
         {
-          sender: payer,
+          sender: wallet.address,
           contract_address: contract_address,
           code_hash: contractCodeHash, // optional but way faster
           msg: {
@@ -255,12 +255,12 @@ let accept_invoice = async (id) => {
 
 
 //  try_query_single_invoice(1);
+//    try_query_single_contract(1)
 //   try_query_all_invoice();
-//   try_query_single_contract(1)
 //  try_query_all_contract()
  
 
  //add_new_invoice();
- accept_invoice(1)
-// cancel_payment(1)
-// withdraw_payment(1)
+ //accept_invoice(1)
+ //cancel_payment(1)
+ withdraw_payment(1)

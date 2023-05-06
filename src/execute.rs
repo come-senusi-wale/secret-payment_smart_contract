@@ -329,7 +329,7 @@ pub fn withraw_payment(
 
     let current_block_time = env.block.time.seconds();
 
-    if current_block_time > invoice.payment_time {
+    if current_block_time < invoice.payment_time {
         return Err(StdError::generic_err(
             "is not time for payment",
         ));

@@ -3,7 +3,6 @@ use cosmwasm_std::{
     MessageInfo, Response,  StdResult,
 };
 
-
 use crate::{
     execute,
     msg::{ InstantiateMsg, QueryMsg, ExecuteMsg,},
@@ -128,3 +127,260 @@ pub fn query(
         
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cosmwasm_std::testing::*;
+    use cosmwasm_std::{from_binary, Coin, Uint128};
+    use secret_toolkit::{
+        utils::types::{Token},
+    };
+
+    use crate::{    
+        state::{ Contract},
+    };
+
+    #[test]
+    fn submit_invoice(){
+        let mut deps = mock_dependencies_with_balance(&[Coin {
+            denom: "uscrt".to_string(),
+            amount: Uint128::new(2),
+        }]);
+
+        let info = mock_info(
+            "creator",
+            &[Coin {
+                denom: "uscrt".to_string(),
+                amount: Uint128::new(2),
+            }],
+        );
+
+        let init_msg = InstantiateMsg {};
+
+        let _res = instantiate(deps.as_mut(), mock_env(), info, init_msg).unwrap();
+
+        // anyone can submit invoice
+        let info = mock_info(
+            "anyone",
+            &[Coin {
+                denom: "uscrt".to_string(),
+                amount: Uint128::new(2),
+            }],
+        );
+
+        let exec_msg = ExecuteMsg::SubmitInvoice {
+            purpose: "building".to_string(),
+            amount: Uint128::new(3),
+            payer: "secret1py4ryg3atyz5cru2m64p0mtga5y09q5a26pa7n".to_string(),
+            days: 2,
+            recurrent_time: Some(2),
+            token: Token::Native("uscrt".to_string()),
+        };
+
+        let _res = execute(deps.as_mut(), mock_env(), info, exec_msg).unwrap();
+
+        let info = mock_info(
+            "anyone",
+            &[Coin {
+                denom: "uscrt".to_string(),
+                amount: Uint128::new(2),
+            }],
+        );
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::NumberOfInvoice {owner: info.sender}).unwrap();
+        let value: u32 = from_binary(&res).unwrap();
+        assert_eq!(1, value);
+    }
+
+    #[test]
+    fn accept_invoice(){
+
+        let mut deps = mock_dependencies_with_balance(&[Coin {
+            denom: "uscrt".to_string(),
+            amount: Uint128::new(2),
+        }]);
+
+        let info = mock_info(
+            "creator",
+            &[Coin {
+                denom: "uscrt".to_string(),
+                amount: Uint128::new(2),
+            }],
+        );
+
+        let init_msg = InstantiateMsg {};
+
+        let _res = instantiate(deps.as_mut(), mock_env(), info, init_msg).unwrap();
+
+        // anyone can submit invoice
+        let info = mock_info(
+            "anyone",
+            &[Coin {
+                denom: "uscrt".to_string(),
+                amount: Uint128::new(2),
+            }],
+        );
+
+        let exec_msg = ExecuteMsg::SubmitInvoice {
+            purpose: "building".to_string(),
+            amount: Uint128::new(3),
+            payer: "secret1py4ryg3atyz5cru2m64p0mtga5y09q5a26pa7n".to_string(),
+            days: 2,
+            recurrent_time: Some(2),
+            token: Token::Native("uscrt".to_string()),
+        };
+
+        let _res = execute(deps.as_mut(), mock_env(), info, exec_msg).unwrap();
+
+        let info = mock_info(
+            "anyone",
+            &[Coin {
+                denom: "uscrt".to_string(),
+                amount: Uint128::new(2),
+            }],
+        );
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::NumberOfInvoice {owner: info.sender}).unwrap();
+        let value: u32 = from_binary(&res).unwrap();
+        assert_eq!(1, value);
+
+        
+        let info = mock_info(
+            "secret1py4ryg3atyz5cru2m64p0mtga5y09q5a26pa7n",
+            &[Coin {
+                denom: "uscrt".to_string(),
+                amount: Uint128::new(6),
+            }],
+        );
+
+        let exec_msg = ExecuteMsg::AcceptInvoice {
+            id: 1,
+        };
+
+        let _res = execute(deps.as_mut(), mock_env(), info, exec_msg).unwrap();
+
+        let info = mock_info(
+            "secret1py4ryg3atyz5cru2m64p0mtga5y09q5a26pa7n",
+            &[Coin {
+                denom: "uscrt".to_string(),
+                amount: Uint128::new(0),
+            }],
+        );
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::SingleContract {id: 1, payer: info.sender}).unwrap();
+        let value: Contract = from_binary(&res).unwrap();
+        assert_eq!(true, value.contract_accepted);
+        assert_eq!("started".to_string(), value.constract_process);
+    }
+
+    #[test]
+    fn cancel_payment(){
+        let mut deps = mock_dependencies_with_balance(&[Coin {
+            denom: "uscrt".to_string(),
+            amount: Uint128::new(2),
+        }]);
+
+        let info = mock_info(
+            "creator",
+            &[Coin {
+                denom: "uscrt".to_string(),
+                amount: Uint128::new(2),
+            }],
+        );
+
+        let init_msg = InstantiateMsg {};
+
+        let _res = instantiate(deps.as_mut(), mock_env(), info, init_msg).unwrap();
+
+        // anyone can submit invoice
+        let info = mock_info(
+            "anyone",
+            &[Coin {
+                denom: "uscrt".to_string(),
+                amount: Uint128::new(2),
+            }],
+        );
+
+        let exec_msg = ExecuteMsg::SubmitInvoice {
+            purpose: "building".to_string(),
+            amount: Uint128::new(3),
+            payer: "secret1py4ryg3atyz5cru2m64p0mtga5y09q5a26pa7n".to_string(),
+            days: 2,
+            recurrent_time: Some(2),
+            token: Token::Native("uscrt".to_string()),
+        };
+
+        let _res = execute(deps.as_mut(), mock_env(), info, exec_msg).unwrap();
+
+        let info = mock_info(
+            "anyone",
+            &[Coin {
+                denom: "uscrt".to_string(),
+                amount: Uint128::new(2),
+            }],
+        );
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::NumberOfInvoice {owner: info.sender}).unwrap();
+        let value: u32 = from_binary(&res).unwrap();
+        assert_eq!(1, value);
+
+        
+        let info = mock_info(
+            "secret1py4ryg3atyz5cru2m64p0mtga5y09q5a26pa7n",
+            &[Coin {
+                denom: "uscrt".to_string(),
+                amount: Uint128::new(6),
+            }],
+        );
+
+        let exec_msg = ExecuteMsg::AcceptInvoice {
+            id: 1,
+        };
+
+        let _res = execute(deps.as_mut(), mock_env(), info, exec_msg).unwrap();
+
+        let info = mock_info(
+            "secret1py4ryg3atyz5cru2m64p0mtga5y09q5a26pa7n",
+            &[Coin {
+                denom: "uscrt".to_string(),
+                amount: Uint128::new(0),
+            }],
+        );
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::SingleContract {id: 1, payer: info.sender}).unwrap();
+        let value: Contract = from_binary(&res).unwrap();
+        assert_eq!(true, value.contract_accepted);
+        assert_eq!("started".to_string(), value.constract_process);
+
+        let info = mock_info(
+            "secret1py4ryg3atyz5cru2m64p0mtga5y09q5a26pa7n",
+            &[Coin {
+                denom: "uscrt".to_string(),
+                amount: Uint128::new(6),
+            }],
+        );
+
+        let exec_msg = ExecuteMsg::CancelPayment {
+            id: 1,
+        };
+
+        let _res = execute(deps.as_mut(), mock_env(), info, exec_msg).unwrap();
+
+        let info = mock_info(
+            "secret1py4ryg3atyz5cru2m64p0mtga5y09q5a26pa7n",
+            &[Coin {
+                denom: "uscrt".to_string(),
+                amount: Uint128::new(0),
+            }],
+        );
+
+        let res = query(deps.as_ref(), mock_env(), QueryMsg::SingleContract {id: 1, payer: info.sender}).unwrap();
+        let value: Contract = from_binary(&res).unwrap();
+        assert_eq!(0, value.account_balance);
+        assert_eq!("stop".to_string(), value.constract_process);
+        assert_eq!(Uint128::new(0), value.invoice.amount);
+    }
+}
+
