@@ -4,16 +4,13 @@ use serde::{Deserialize, Serialize};
 use cosmwasm_std::{Addr, StdResult, Storage, Uint128};
 use secret_toolkit::serialization::Json;
 use secret_toolkit::storage::{Item, Keymap};
-use secret_toolkit::{
-    utils::types::{Token},
-};
-
+use secret_toolkit::utils::types::Token;
 
 pub const PREFIX_INVOICE: &[u8] = b"invoice";
 pub const PREFIX_CONTRACT: &[u8] = b"contract";
 
 #[derive(Serialize, Debug, Deserialize, Clone, PartialEq, Eq, JsonSchema)]
-pub struct Invoice{
+pub struct Invoice {
     pub invoice_id: u64,
     pub receiver: String,
     pub purpose: String,
@@ -22,21 +19,20 @@ pub struct Invoice{
     pub days: u64,
     pub recurrent: Option<bool>,
     pub recurrent_times: u64,
-    pub remaing_time_of_payment: u64,
+    pub remaining_time_of_payment: u64,
     pub status: String,
     pub payment_time: u64,
     pub critical_time: u64,
     pub payment_condition: String,
-    pub token: Token
-    
+    pub token: Token,
 }
 
-#[derive(Serialize, Debug, Deserialize, Clone, PartialEq, Eq,  JsonSchema)]
-pub struct Contract{
+#[derive(Serialize, Debug, Deserialize, Clone, PartialEq, Eq, JsonSchema)]
+pub struct Contract {
     pub invoice_id: u64,
     pub account_balance: u128,
-    pub constract_process: String,
-    pub invoice : Invoice,
+    pub contract_process: String,
+    pub invoice: Invoice,
     pub contract_accepted: bool,
 }
 
@@ -57,12 +53,10 @@ pub static INVOICE: Keymap<u64, Invoice, Json> = Keymap::new(PREFIX_INVOICE);
 pub struct InvoiceStore {}
 
 impl InvoiceStore {
-
-    pub fn load_invoice(store: &dyn Storage, owner: &Addr, id: u64,) -> Invoice {
+    pub fn load_invoice(store: &dyn Storage, owner: &Addr, id: u64) -> Invoice {
         INVOICE
             .add_suffix(owner.as_bytes())
             .get(store, &id.clone())
-            //.unwrap_or_default()
             .unwrap()
     }
 
@@ -74,7 +68,7 @@ impl InvoiceStore {
     ) -> StdResult<()> {
         INVOICE
             .add_suffix(owner.as_bytes())
-            .insert(store, &id, invoice)     
+            .insert(store, &id, invoice)
     }
 
     pub fn paging_invoice_list(
@@ -86,21 +80,17 @@ impl InvoiceStore {
         INVOICE
             .add_suffix(owner.as_bytes())
             .paging(store, page, page_size)
-            
     }
 
-    pub fn num_invoice(store: &dyn Storage, owner: &Addr,) -> u32 {
+    pub fn num_invoice(store: &dyn Storage, owner: &Addr) -> u32 {
         INVOICE
             .add_suffix(owner.as_bytes())
             .get_len(store)
             .unwrap_or(0)
     }
-
-
 }
 
-
-pub static  CONTRACT: Keymap<u64, Contract, Json> = Keymap::new(PREFIX_CONTRACT);
+pub static CONTRACT: Keymap<u64, Contract, Json> = Keymap::new(PREFIX_CONTRACT);
 
 pub struct ContractStore {}
 
@@ -113,14 +103,13 @@ impl ContractStore {
     ) -> StdResult<()> {
         CONTRACT
             .add_suffix(payer.as_bytes())
-            .insert(store, &id, contract)     
+            .insert(store, &id, contract)
     }
 
-    pub fn load_contract(store: &dyn Storage, payer: &Addr, id: u64,) -> Contract {
+    pub fn load_contract(store: &dyn Storage, payer: &Addr, id: u64) -> Contract {
         CONTRACT
             .add_suffix(payer.as_bytes())
             .get(store, &id.clone())
-            //.unwrap_or_default()
             .unwrap()
     }
 
@@ -133,10 +122,9 @@ impl ContractStore {
         CONTRACT
             .add_suffix(payer.as_bytes())
             .paging(store, page, page_size)
-            
     }
 
-    pub fn num_contract(store: &dyn Storage, payer: &Addr,) -> u32 {
+    pub fn num_contract(store: &dyn Storage, payer: &Addr) -> u32 {
         CONTRACT
             .add_suffix(payer.as_bytes())
             .get_len(store)

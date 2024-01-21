@@ -1,40 +1,35 @@
 use cosmwasm_std::{
-    coins,  BankMsg, CosmosMsg, DepsMut, Env, MessageInfo, Response, StdError,
-    StdResult, Uint128, 
+    coins, BankMsg, CosmosMsg, DepsMut, Env, MessageInfo, Response, StdError, StdResult, Uint128,
 };
 
-use secret_toolkit::{
-    utils::types::{Token},
-};
+use secret_toolkit::utils::types::Token;
 
-use crate::{
-    state::{InvoiceStore, Invoice, Contract, ContractStore, get_next_invoice_id}, 
-};
+use crate::state::{get_next_invoice_id, Contract, ContractStore, Invoice, InvoiceStore};
 
 pub struct Empty {}
 
 #[allow(clippy::too_many_arguments)]
 pub fn new_invoice(
-    deps: DepsMut, 
-    _env: Env, 
+    deps: DepsMut,
+    _env: Env,
     info: MessageInfo,
     purpose: String,
-    amount:  Uint128,
+    amount: Uint128,
     payer: String,
     days: u64,
     recurrent_time: Option<u64>,
-    token: Token) -> StdResult<Response> {
-    
-    //get the signer
+    token: Token,
+) -> StdResult<Response> {
+    // get the signer
     let receiver = info.sender;
 
-    //validate payer address
+    // validate payer address
     let payer_address = deps.api.addr_validate(payer.as_str())?;
 
-    //get next invoice id
+    // get next invoice id
     let next_invoice_id = get_next_invoice_id(deps.storage)?;
 
-    //check if recurrent time is specify
+    // check if recurrent time is specify
     let times_of_recurrent = match recurrent_time {
         Some(time) => time,
         None => 0,
@@ -47,7 +42,7 @@ pub fn new_invoice(
 
     let status = "not started".to_string();
 
-    let invoice =  Invoice{
+    let invoice = Invoice {
         invoice_id: next_invoice_id,
         receiver: receiver.to_string(),
         purpose: purpose,
@@ -56,20 +51,20 @@ pub fn new_invoice(
         days: days,
         recurrent: Some(recurrent_status),
         recurrent_times: times_of_recurrent,
-        remaing_time_of_payment: 0,
+        remaining_time_of_payment: 0,
         status: status,
         payment_time: 0,
         critical_time: 0,
         payment_condition: "no".to_string(),
-        token: token
+        token: token,
     };
 
     InvoiceStore::save(deps.storage, &receiver, next_invoice_id, &invoice)?;
 
-    let contract = Contract{
-        invoice_id : next_invoice_id,
+    let contract = Contract {
+        invoice_id: next_invoice_id,
         account_balance: 0,
-        constract_process: "not started".to_string(), 
+        contract_process: "not started".to_string(),
         invoice: invoice,
         contract_accepted: false,
     };
@@ -78,163 +73,132 @@ pub fn new_invoice(
 
     deps.api.debug("invoice created successfully");
     Ok(Response::default())
-
 }
 
-pub fn accept_invoice(
-    deps: DepsMut, 
-    env: Env, 
-    info: MessageInfo,
-    id: u64, ) -> StdResult<Response> {
-
-    //get the signer which is the payer
+pub fn accept_invoice(deps: DepsMut, env: Env, info: MessageInfo, id: u64) -> StdResult<Response> {
+    // get payer address from function param
     let payer = info.sender;
 
-    //get the contract of specific id related to invoice
-    let mut contract =  ContractStore::load_contract(deps.storage, &payer, id,);
+    // get the contract of specific id related to invoice
+    let mut contract = ContractStore::load_contract(deps.storage, &payer, id);
 
-    //get invoice of specific id in related to contract
+    // get invoice of specific id in related to contract
     let mut invoice = &mut contract.invoice;
 
-    //get the reciver adddress
-    let reciever = deps.api.addr_validate(invoice.receiver.as_str())?;
+    // get the receiver address
+    let receiver = deps.api.addr_validate(invoice.receiver.as_str())?;
 
     let payer_address = deps.api.addr_validate(invoice.payer.as_str())?;
 
-    //check that the signer is one that invoce is ment for
+    // verify that the payer in invoice
     if payer_address != payer {
         return Err(StdError::generic_err(
-            "the invoice is not ment for you",
+            "You are not the payer of this Invoice",
         ));
     }
 
     if contract.contract_accepted == true {
-        return Err(StdError::generic_err(
-            "you have already accepted this invoice",
-        ));
+        return Err(StdError::generic_err("Invoice have already been accepted"));
     }
 
     let mut amount = Uint128::zero();
 
-    if invoice.recurrent == Some(true){
+    if invoice.recurrent == Some(true) {
         let expected_amount = invoice.amount * Uint128::new(invoice.recurrent_times.into());
 
         for coin in &info.funds {
-           amount += coin.amount 
+            amount += coin.amount
         }
 
-        if amount < expected_amount{
+        if amount < expected_amount {
             return Err(StdError::generic_err(
-                "provide correct amount please",
+                "Amount is insufficient for recurrent payment in Invoice",
             ));
         }
-
-        
-    }else{
-
+    } else {
         for coin in &info.funds {
-            amount += coin.amount 
+            amount += coin.amount
         }
-       
-        if amount < invoice.amount{
+
+        if amount < invoice.amount {
             return Err(StdError::generic_err(
-                "provide correct amount please",
+                "Amount is insufficient for single payment in Invoice",
             ));
         }
     }
 
     if amount.is_zero() {
-        return Err(StdError::generic_err("No funds were sent to be deposited"));
+        return Err(StdError::generic_err("Insufficient token attach"));
     }
 
-
-   
-    let remaing_time_of_payment = match invoice.recurrent {
-        Some(_remaing_time) => invoice.recurrent_times,
+    let remaining_time_of_payment = match invoice.recurrent {
+        Some(_remaining_time) => invoice.recurrent_times,
         None => 1,
     };
-
-    // let account_balance = match payment {
-    //     Some(pay) => pay.amount,
-    //     None => Uint128::new(0),
-    // };
 
     let account_balance = amount;
 
     let current_block_time = env.block.time.seconds();
-    let day_in_timestmp = invoice.days * 86400;
-    let paid_time = current_block_time + day_in_timestmp;
+    let day_in_timestamp = invoice.days * 86400;
+    let paid_time = current_block_time + day_in_timestamp;
     let critical_time = paid_time / 2;
 
-    // updating neccessary field
+    // updating invoice field
     invoice.payment_time = paid_time;
     invoice.critical_time = critical_time;
     invoice.payment_condition = "pay full".to_string();
     invoice.status = "accepted".to_string();
-    invoice.remaing_time_of_payment = remaing_time_of_payment;
+    invoice.remaining_time_of_payment = remaining_time_of_payment;
 
     contract.account_balance = account_balance.into();
     contract.contract_accepted = true;
-    contract.constract_process = "started".to_string();
+    contract.contract_process = "started".to_string();
 
     // save the update
-    InvoiceStore::save(deps.storage, &reciever, id, &invoice)?;
+    InvoiceStore::save(deps.storage, &receiver, id, &invoice)?;
     ContractStore::save(deps.storage, &payer, id, &contract)?;
 
     deps.api.debug("invoice accepted successfully");
     Ok(Response::default())
-
-
-
 }
 
-pub fn stop_contract(
-    deps: DepsMut, 
-    env: Env, 
-    info: MessageInfo,
-    id: u64, ) -> StdResult<Response> {
-    
-    //get the signer which is the payer
+pub fn stop_contract(deps: DepsMut, env: Env, info: MessageInfo, id: u64) -> StdResult<Response> {
+    // get the signer which is the payer
     let payer = info.sender;
 
-    //get the contract of specific id related to invoice
-    let mut contract =  ContractStore::load_contract(deps.storage, &payer, id,);
+    // get the contract of specific id related to invoice
+    let mut contract = ContractStore::load_contract(deps.storage, &payer, id);
 
-    //get invoice of specific id in related to contract
+    // get invoice of specific id in related to contract
     let mut invoice = &mut contract.invoice;
 
-    //get the reciver adddress
-    let reciever = deps.api.addr_validate(invoice.receiver.as_str())?;
+    // get the receiver address
+    let receiver = deps.api.addr_validate(invoice.receiver.as_str())?;
 
     let payer_address = deps.api.addr_validate(invoice.payer.as_str())?;
 
-    //check that the signer is one that invoce is ment for
+    // verify the signer in invoice
     if payer_address != payer {
         return Err(StdError::generic_err(
-            "the invoice is not ment for you",
+            "You are not the payer for this invoice",
         ));
     }
 
-    //check if the payer has accepted the contract
+    // check if the payer has accepted the contract
     if contract.contract_accepted != true {
+        return Err(StdError::generic_err("You have not accepted this invoice"));
+    }
+
+    // check if the contract has been carry out
+    if contract.contract_process == "done".to_string() {
         return Err(StdError::generic_err(
-            "you have not accepted this invoice",
+            "The purpose of the invoice have been marked as DONE",
         ));
     }
 
-    //check if th contract has been carry out
-    if contract.constract_process == "done".to_string() {
-        return Err(StdError::generic_err(
-            "this contract has been carry out already",
-        ));
-    }
-
-    
-    //check if th contract has been stop already
-    if contract.constract_process == "stop".to_string() {
-        return Err(StdError::generic_err(
-            "this contract has been stoped already",
-        ));
+    // check if th contract has been stop already
+    if contract.contract_process == "stop".to_string() {
+        return Err(StdError::generic_err("Invoice have already been canceled"));
     }
 
     let current_block_time = env.block.time.seconds();
@@ -242,192 +206,174 @@ pub fn stop_contract(
     let denom = "uscrt".to_string();
 
     if invoice.critical_time > current_block_time {
-        //set the amount to half of current payment
+        // set the amount to half of current payment
         let amount_to_pay = invoice.amount / Uint128::new(2);
 
-        //get the remaining balance
-        let remaining_balance:u128 = contract.account_balance - <Uint128 as Into<u128>>::into(amount_to_pay);
+        // get the remaining balance
+        let remaining_balance: u128 =
+            contract.account_balance - <Uint128 as Into<u128>>::into(amount_to_pay);
 
-        // payer should recieve their remaining balance
+        // payer should receive their remaining balance
         CosmosMsg::<Empty>::Bank(BankMsg::Send {
             to_address: payer.to_string(),
-            amount: coins(remaining_balance, denom)
+            amount: coins(remaining_balance, denom),
         });
 
         invoice.payment_condition = "half".to_string();
         invoice.amount = amount_to_pay;
         invoice.status = "stop".to_string();
-        invoice.remaing_time_of_payment = 1;
+        invoice.remaining_time_of_payment = 1;
 
-        contract.constract_process = "stop".to_string();
+        contract.contract_process = "stop".to_string();
         contract.account_balance = amount_to_pay.into();
-        
+
         // save the update
-        InvoiceStore::save(deps.storage, &reciever, id, &invoice)?;
+        InvoiceStore::save(deps.storage, &receiver, id, &invoice)?;
         ContractStore::save(deps.storage, &payer, id, &contract)?;
-
-    }else{
-
-        // payer should recieve all their money back
+    } else {
+        // payer should receive all pending their money back
         CosmosMsg::<Empty>::Bank(BankMsg::Send {
             to_address: payer.to_string(),
-            amount: coins(contract.account_balance, denom)
+            amount: coins(contract.account_balance, denom),
         });
 
         invoice.payment_condition = "no".to_string();
         invoice.amount = Uint128::new(0);
         invoice.status = "stop".to_string();
-        invoice.remaing_time_of_payment = 0;
+        invoice.remaining_time_of_payment = 0;
 
-        contract.constract_process = "stop".to_string();
-        contract.account_balance= 0;
+        contract.contract_process = "stop".to_string();
+        contract.account_balance = 0;
 
         // save the update
-        InvoiceStore::save(deps.storage, &reciever, id, &invoice)?;
+        InvoiceStore::save(deps.storage, &receiver, id, &invoice)?;
         ContractStore::save(deps.storage, &payer, id, &contract)?;
-
     }
 
     deps.api.debug("invoice canceled successfully");
     Ok(Response::default())
 }
 
-pub fn withraw_payment(
-    deps: DepsMut, 
-    env: Env, 
+pub fn withdraw_payment(
+    deps: DepsMut,
+    env: Env,
     info: MessageInfo,
-    id: u64, ) -> StdResult<Response> {
-    
-    //get the signer which is the reciever of payment
+    id: u64,
+) -> StdResult<Response> {
+    // get the signer which is the receiver of payment
     let receiver = info.sender;
 
-    //get invoice of specific id in related to contract
-    let mut invoice = InvoiceStore::load_invoice(deps.storage, &receiver, id,);
-    
-    //reciver address in the invoice
-    let reciever_address = deps.api.addr_validate(invoice.receiver.as_str())?;
+    // get invoice of specific id in related to contract
+    let mut invoice = InvoiceStore::load_invoice(deps.storage, &receiver, id);
 
-    //payer address in the invoice
+    // receiver address in the invoice
+    let receiver_address = deps.api.addr_validate(invoice.receiver.as_str())?;
+
+    // verify payer address in the invoice
     let payer = deps.api.addr_validate(invoice.payer.as_str())?;
 
-    //check that the signer is one that submited the invoice
-    if reciever_address != receiver {
+    // check that the signer is one that submitted the invoice
+    if receiver_address != receiver {
         return Err(StdError::generic_err(
-            "this is not your invoice",
+            "You are not the payee of this invoice",
         ));
     }
 
-    //get the contract of specific id related to invoice
-    let contract =  ContractStore::load_contract(deps.storage, &payer, id,);
+    // get the contract of specific id related to invoice
+    let contract = ContractStore::load_contract(deps.storage, &payer, id);
 
-    //check if the contract has been accepted
+    // check if the contract has been accepted
     if contract.contract_accepted != true {
-        return Err(StdError::generic_err(
-            "this invoice has not been accepted",
-        ));
+        return Err(StdError::generic_err("Invoice have not been accepted"));
     }
 
     let current_block_time = env.block.time.seconds();
 
     if current_block_time < invoice.payment_time {
         return Err(StdError::generic_err(
-            "is not time for payment",
+            "Payment period have not been reached for this",
         ));
     }
 
-    if invoice.remaing_time_of_payment == 0 {
+    if invoice.remaining_time_of_payment == 0 {
         return Err(StdError::generic_err(
-            "no payment for you again",
+            "All payment have been made for this invoice",
         ));
     }
 
     if invoice.payment_condition == "no".to_string() {
-        return Err(StdError::generic_err(
-            "is like your invoice was canceled",
-        ));
+        return Err(StdError::generic_err("Invoice have been canceled"));
     }
 
-    //check if the payer has money in is account
+    // check if the payer has money in is account
     if contract.account_balance < 1 {
         return Err(StdError::generic_err(
-            "the payer has no money in his account",
+            "No payment reserved for this Invoice",
         ));
     }
 
     let denom = "uscrt".to_string();
 
     if invoice.payment_condition == "half".to_string() {
-
         invoice.status = "done".to_string();
-        invoice.remaing_time_of_payment = 0;
+        invoice.remaining_time_of_payment = 0;
 
         let amount_to_pay = invoice.amount / Uint128::new(2);
 
-        // resave invoice changes
+        // save invoice changes
         InvoiceStore::save(deps.storage, &receiver, id, &invoice)?;
 
-        let contract_store = Contract{
+        let contract_store = Contract {
             invoice_id: id,
             account_balance: 0,
-            constract_process: contract.constract_process,
-            invoice : invoice,
+            contract_process: contract.contract_process,
+            invoice,
             contract_accepted: contract.contract_accepted,
         };
 
-
-        // employee recieve their payment
+        // employee receive their payment
         CosmosMsg::<Empty>::Bank(BankMsg::Send {
             to_address: receiver.to_string(),
-            amount: coins(amount_to_pay.into(), denom)
+            amount: coins(amount_to_pay.into(), denom),
         });
 
-        // resave contract changes
+        // save contract changes
         ContractStore::save(deps.storage, &payer, id, &contract_store)?;
-        
-    }else{
-
-        //get the remaing time
-        let remaing_time_of_payment = match invoice.recurrent {
-            Some(_remaing_time) => invoice.remaing_time_of_payment - 1,
+    } else {
+        //get the remaining time
+        let remaining_time_of_payment = match invoice.recurrent {
+            Some(_remaining_time) => invoice.remaining_time_of_payment - 1,
             None => 0,
         };
 
-        let account_balance = contract.account_balance - <Uint128 as Into<u128>>::into(invoice.amount);
+        let account_balance =
+            contract.account_balance - <Uint128 as Into<u128>>::into(invoice.amount);
 
-        invoice.remaing_time_of_payment = remaing_time_of_payment;
+        invoice.remaining_time_of_payment = remaining_time_of_payment;
 
         let amount_to_pay = invoice.amount.into();
 
-        // resave invoice changes
+        // save invoice changes
         InvoiceStore::save(deps.storage, &receiver, id, &invoice)?;
 
-        let contract_store = Contract{
+        let contract_store = Contract {
             invoice_id: id,
             account_balance: account_balance,
-            constract_process: contract.constract_process,
-            invoice : invoice,
+            contract_process: contract.contract_process,
+            invoice: invoice,
             contract_accepted: contract.contract_accepted,
         };
 
-
-        // employee recieve their payment
+        // employee receive their payment
         CosmosMsg::<Empty>::Bank(BankMsg::Send {
             to_address: receiver.to_string(),
-            amount: coins(amount_to_pay, denom)
+            amount: coins(amount_to_pay, denom),
         });
 
-        // resave contract changes
+        // save contract changes
         ContractStore::save(deps.storage, &payer, id, &contract_store)?;
-
     }
-
-    
-
 
     deps.api.debug("invoice accepted successfully");
     Ok(Response::default())
 }
-
-
-
-

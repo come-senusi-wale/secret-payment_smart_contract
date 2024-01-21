@@ -1,12 +1,11 @@
 use cosmwasm_std::{
-    entry_point, to_binary, Binary, Deps, DepsMut, Env,
-    MessageInfo, Response,  StdResult,
+    entry_point, to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult,
 };
 
 use crate::{
     execute,
-    msg::{ InstantiateMsg, QueryMsg, ExecuteMsg,},
-    state::{InvoiceStore, ContractStore,},
+    msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
+    state::{ContractStore, InvoiceStore},
 };
 
 #[entry_point]
@@ -16,17 +15,11 @@ pub fn instantiate(
     _info: MessageInfo,
     _msg: InstantiateMsg,
 ) -> StdResult<Response> {
-
     Ok(Response::default())
 }
 
 #[entry_point]
-pub fn execute(
-    deps: DepsMut, 
-    env: Env, 
-    info: MessageInfo, 
-    msg: ExecuteMsg) -> StdResult<Response> {
-
+pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> StdResult<Response> {
     match msg {
         ExecuteMsg::SubmitInvoice {
             purpose,
@@ -46,104 +39,61 @@ pub fn execute(
             recurrent_time,
             token,
         ),
-        ExecuteMsg::AcceptInvoice {
-            id,
-        } => execute::accept_invoice(
-            deps,
-            env,
-            info,
-            id,
-        ),
-        ExecuteMsg::CancelPayment {
-            id,
-        } => execute::stop_contract(
-            deps,
-            env,
-            info,
-            id,
-        ),
-        ExecuteMsg::WithdrawPayment {
-            id,
-        } => execute::withraw_payment(
-            deps,
-            env,
-            info,
-            id,
-        ),
-        
+        ExecuteMsg::AcceptInvoice { id } => execute::accept_invoice(deps, env, info, id),
+        ExecuteMsg::CancelPayment { id } => execute::stop_contract(deps, env, info, id),
+        ExecuteMsg::WithdrawPayment { id } => execute::withdraw_payment(deps, env, info, id),
     }
 }
 
 #[entry_point]
-pub fn query(
-    deps: Deps, 
-    _env: Env, 
-    msg: QueryMsg
-) -> StdResult<Binary> {
+pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::SingleInvoice {
-            id,
-            owner
-        } =>{
-            
+        QueryMsg::SingleInvoice { id, owner } => {
             to_binary(&InvoiceStore::load_invoice(deps.storage, &owner, id))
-        },
-        QueryMsg::NumberOfInvoice {
-            owner
-        } =>{
-            
+        }
+        QueryMsg::NumberOfInvoice { owner } => {
             to_binary(&InvoiceStore::num_invoice(deps.storage, &owner))
-        },
+        }
         QueryMsg::PaginatedInvoice {
             owner,
             page,
-            page_size
-        } =>{
-            
-            to_binary(&InvoiceStore::paging_invoice_list(deps.storage, &owner, page, page_size)?)
-        },
-        QueryMsg::SingleContract {
-            id,
-            payer
-        } =>{
-            
+            page_size,
+        } => to_binary(&InvoiceStore::paging_invoice_list(
+            deps.storage,
+            &owner,
+            page,
+            page_size,
+        )?),
+        QueryMsg::SingleContract { id, payer } => {
             to_binary(&ContractStore::load_contract(deps.storage, &payer, id))
-        },
-        QueryMsg::NumberOfContract {
-            payer
-        } =>{
-            
+        }
+        QueryMsg::NumberOfContract { payer } => {
             to_binary(&ContractStore::num_contract(deps.storage, &payer))
-        },
+        }
         QueryMsg::PaginatedContract {
             payer,
             page,
-            page_size
-        } =>{
-            
-            to_binary(&ContractStore::paging_contract_list(deps.storage, &payer, page, page_size)?)
-        },
-        
-        
+            page_size,
+        } => to_binary(&ContractStore::paging_contract_list(
+            deps.storage,
+            &payer,
+            page,
+            page_size,
+        )?),
     }
 }
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use cosmwasm_std::testing::*;
     use cosmwasm_std::{from_binary, Coin, Uint128};
-    use secret_toolkit::{
-        utils::types::{Token},
-    };
+    use secret_toolkit::utils::types::Token;
 
-    use crate::{    
-        state::{ Contract},
-    };
+    use crate::state::Contract;
 
     #[test]
-    fn submit_invoice(){
+    fn submit_invoice() {
         let mut deps = mock_dependencies_with_balance(&[Coin {
             denom: "uscrt".to_string(),
             amount: Uint128::new(2),
@@ -189,14 +139,18 @@ mod tests {
             }],
         );
 
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::NumberOfInvoice {owner: info.sender}).unwrap();
+        let res = query(
+            deps.as_ref(),
+            mock_env(),
+            QueryMsg::NumberOfInvoice { owner: info.sender },
+        )
+        .unwrap();
         let value: u32 = from_binary(&res).unwrap();
         assert_eq!(1, value);
     }
 
     #[test]
-    fn accept_invoice(){
-
+    fn accept_invoice() {
         let mut deps = mock_dependencies_with_balance(&[Coin {
             denom: "uscrt".to_string(),
             amount: Uint128::new(2),
@@ -242,11 +196,15 @@ mod tests {
             }],
         );
 
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::NumberOfInvoice {owner: info.sender}).unwrap();
+        let res = query(
+            deps.as_ref(),
+            mock_env(),
+            QueryMsg::NumberOfInvoice { owner: info.sender },
+        )
+        .unwrap();
         let value: u32 = from_binary(&res).unwrap();
         assert_eq!(1, value);
 
-        
         let info = mock_info(
             "secret1py4ryg3atyz5cru2m64p0mtga5y09q5a26pa7n",
             &[Coin {
@@ -255,9 +213,7 @@ mod tests {
             }],
         );
 
-        let exec_msg = ExecuteMsg::AcceptInvoice {
-            id: 1,
-        };
+        let exec_msg = ExecuteMsg::AcceptInvoice { id: 1 };
 
         let _res = execute(deps.as_mut(), mock_env(), info, exec_msg).unwrap();
 
@@ -269,14 +225,22 @@ mod tests {
             }],
         );
 
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::SingleContract {id: 1, payer: info.sender}).unwrap();
+        let res = query(
+            deps.as_ref(),
+            mock_env(),
+            QueryMsg::SingleContract {
+                id: 1,
+                payer: info.sender,
+            },
+        )
+        .unwrap();
         let value: Contract = from_binary(&res).unwrap();
         assert_eq!(true, value.contract_accepted);
-        assert_eq!("started".to_string(), value.constract_process);
+        assert_eq!("started".to_string(), value.contract_process);
     }
 
     #[test]
-    fn cancel_payment(){
+    fn cancel_payment() {
         let mut deps = mock_dependencies_with_balance(&[Coin {
             denom: "uscrt".to_string(),
             amount: Uint128::new(2),
@@ -322,11 +286,15 @@ mod tests {
             }],
         );
 
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::NumberOfInvoice {owner: info.sender}).unwrap();
+        let res = query(
+            deps.as_ref(),
+            mock_env(),
+            QueryMsg::NumberOfInvoice { owner: info.sender },
+        )
+        .unwrap();
         let value: u32 = from_binary(&res).unwrap();
         assert_eq!(1, value);
 
-        
         let info = mock_info(
             "secret1py4ryg3atyz5cru2m64p0mtga5y09q5a26pa7n",
             &[Coin {
@@ -335,9 +303,7 @@ mod tests {
             }],
         );
 
-        let exec_msg = ExecuteMsg::AcceptInvoice {
-            id: 1,
-        };
+        let exec_msg = ExecuteMsg::AcceptInvoice { id: 1 };
 
         let _res = execute(deps.as_mut(), mock_env(), info, exec_msg).unwrap();
 
@@ -349,10 +315,18 @@ mod tests {
             }],
         );
 
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::SingleContract {id: 1, payer: info.sender}).unwrap();
+        let res = query(
+            deps.as_ref(),
+            mock_env(),
+            QueryMsg::SingleContract {
+                id: 1,
+                payer: info.sender,
+            },
+        )
+        .unwrap();
         let value: Contract = from_binary(&res).unwrap();
         assert_eq!(true, value.contract_accepted);
-        assert_eq!("started".to_string(), value.constract_process);
+        assert_eq!("started".to_string(), value.contract_process);
 
         let info = mock_info(
             "secret1py4ryg3atyz5cru2m64p0mtga5y09q5a26pa7n",
@@ -362,9 +336,7 @@ mod tests {
             }],
         );
 
-        let exec_msg = ExecuteMsg::CancelPayment {
-            id: 1,
-        };
+        let exec_msg = ExecuteMsg::CancelPayment { id: 1 };
 
         let _res = execute(deps.as_mut(), mock_env(), info, exec_msg).unwrap();
 
@@ -376,11 +348,18 @@ mod tests {
             }],
         );
 
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::SingleContract {id: 1, payer: info.sender}).unwrap();
+        let res = query(
+            deps.as_ref(),
+            mock_env(),
+            QueryMsg::SingleContract {
+                id: 1,
+                payer: info.sender,
+            },
+        )
+        .unwrap();
         let value: Contract = from_binary(&res).unwrap();
         assert_eq!(0, value.account_balance);
-        assert_eq!("stop".to_string(), value.constract_process);
+        assert_eq!("stop".to_string(), value.contract_process);
         assert_eq!(Uint128::new(0), value.invoice.amount);
     }
 }
-

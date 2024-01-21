@@ -1,11 +1,9 @@
 #![allow(clippy::field_reassign_with_default)] // This is triggered in `#[derive(JsonSchema)]`
 
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 use cosmwasm_std::{Addr, Uint128};
-use secret_toolkit::{
-    utils::types::{Token},
-};
+use schemars::JsonSchema;
+use secret_toolkit::utils::types::Token;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, JsonSchema)]
 pub struct InstantiateMsg {}
@@ -31,7 +29,6 @@ pub enum ExecuteMsg {
     WithdrawPayment {
         id: u64,
     },
-  
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
@@ -43,10 +40,10 @@ pub enum QueryMsg {
         id: u64,
         owner: Addr,
     },
-    NumberOfInvoice{
+    NumberOfInvoice {
         owner: Addr,
     },
-    PaginatedInvoice{
+    PaginatedInvoice {
         owner: Addr,
         page: u32,
         page_size: u32,
@@ -55,13 +52,12 @@ pub enum QueryMsg {
         id: u64,
         payer: Addr,
     },
-    NumberOfContract{
+    NumberOfContract {
         payer: Addr,
     },
-    PaginatedContract{
+    PaginatedContract {
         payer: Addr,
         page: u32,
         page_size: u32,
     },
- 
 }
