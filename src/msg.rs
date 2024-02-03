@@ -14,7 +14,9 @@ pub struct InstantiateMsg {}
 pub enum ExecuteMsg {
     SubmitInvoice {
         purpose: String,
-        amount: Uint128,
+        amount: u128,
+        admin_charge: Uint128,
+        customer_charge: Uint128,
         payer: String,
         days: u64,
         recurrent_time: Option<u64>,
@@ -29,6 +31,9 @@ pub enum ExecuteMsg {
     WithdrawPayment {
         id: u64,
     },
+    AdminUpdateAmin{
+        newAdmin: String,
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
@@ -60,4 +65,5 @@ pub enum QueryMsg {
         page: u32,
         page_size: u32,
     },
+    AdmimWallet {},
 }

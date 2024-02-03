@@ -8,7 +8,7 @@ const wallet = new Wallet(process.env.MNEMONIC);
 const contract_wasm = fs.readFileSync("../contract.wasm");
 
 const secretjs = new SecretNetworkClient({
-    chainId: "pulsar-2",
+    chainId: "pulsar-3",
     url: "https://api.pulsar.scrttestnet.com",
     wallet: wallet,
     walletAddress: wallet.address,
@@ -58,8 +58,8 @@ let upload_contract = async () => {
   
 //upload_contract();
 
-let codeId = 21044;
-let contractCodeHash = 'add0d4c751f7503a564031dab3b31007c696382d732c88fb95d4d07aee4c5fc8';
+let codeId = 3715;
+let contractCodeHash = '9e86cfe59365a51f526d8163ac7f4bb84fd28c12f2e32428716cee1b57bf74d3';
 
 let instantiate_contract = async () => {
     // Create an instance of the Counter contract, providing a starting count
@@ -77,19 +77,21 @@ let instantiate_contract = async () => {
       }
     );
       
-    //console.log(tx);
+    //console.log('tx', tx);
 
-    //Find the contract_address in the logs
+    // Find the contract_address in the logs
     const contractAddress = tx.arrayLog.find(
       (log) => log.type === "message" && log.key === "contract_address"
     ).value;
-  
+
     console.log(contractAddress);
+  
+    
 };
   
 //instantiate_contract();
 
-let contract_address = 'secret17hxzcy4y8aznjsjlv6l33tk4fql5fcsl9zccjm';
+let contract_address = 'secret1qctcuh4yv5cufpm9t97p8zmdn07sgtqu080cqj';
 
 // for query single invoice
 let try_query_single_invoice = async (id) => {
@@ -104,21 +106,49 @@ let try_query_single_invoice = async (id) => {
 
     console.log(my_query);
   };
+
+  // for query page invoice
+let try_query_page_invoice = async (page, limit) => {
+  const my_query = await secretjs.query.compute.queryContract({
+      contract_address: contract_address,
+      code_hash: contractCodeHash,
+      query: { paginated_invoice: {
+        owner: wallet.address,
+        page: page,
+        page_size: limit
+      } },
+  });
+
+  console.log(my_query);
+};
   
 
 
 // for query number of invoice
 let try_query_all_invoice = async () => {
-    const my_query = await secretjs.query.compute.queryContract({
-        contract_address: contract_address,
-        code_hash: contractCodeHash,
-        query: { number_of_invoice: {
-          owner: wallet.address
-        } },
-    });
+  const my_query = await secretjs.query.compute.queryContract({
+      contract_address: contract_address,
+      code_hash: contractCodeHash,
+      query: { number_of_invoice: {
+        owner: "secret1kycte7gyu3mw00km97w0suu9z5cvt6edqyt095"
+      } },
+  });
 
-    console.log(my_query);
-  };
+  console.log(my_query);
+};
+
+// for query admin account
+let try_query_admin_account = async () => {
+  const my_query = await secretjs.query.compute.queryContract({
+      contract_address: contract_address,
+      code_hash: contractCodeHash,
+      query: { admim_wallet: {
+       
+      } },
+  });
+
+  console.log(my_query);
+};
 
 //for submiting invoice
 let add_new_invoice = async () => {
@@ -130,7 +160,7 @@ let add_new_invoice = async () => {
           contract_address: contract_address,
           code_hash: contractCodeHash, // optional but way faster
           msg: {
-            submit_invoice: { purpose: "build contract", amount: "1", payer: wallet.address, days: 6, recurrent_time: 1, token: { native: "uscrt" }},
+            submit_invoice: { purpose: "build contract", amount: "800", admin_charge: "50", customer_charge: "89", payer: "secret1kycte7gyu3mw00km97w0suu9z5cvt6edqyt095", days: 6, recurrent_time: 2, token: { native: "uscrt" }},
           },
           sentFunds: [], // optional
         },
@@ -215,7 +245,7 @@ let accept_invoice = async (id) => {
           },
       
           sender: wallet.address,
-          sent_funds: [{ denom: "uscrt", amount: "10" }]
+          sent_funds: [{ denom: "uscrt", amount: "1700" }]
         },
         {
           gasLimit: 100_000,
@@ -223,7 +253,7 @@ let accept_invoice = async (id) => {
       );
       console.log(tx);
     } catch (error) {
-      console.log(error);
+      //console.log(error);
     }
   };
   
@@ -253,14 +283,44 @@ let accept_invoice = async (id) => {
   };
 
 
+  //for changing admin account
+  let change_admin_account = async () => {
+      
+    try {
+      let tx = await secretjs.tx.compute.executeContract(
+        {
+          sender: wallet.address,
+          contract_address: contract_address,
+          code_hash: contractCodeHash, // optional but way faster
+          msg: {
+            admin_update_amin: { newAdmin: "secret1kycte7gyu3mw00km97w0suu9z5cvt6edqyt095"},
+          },
+          sentFunds: [], // optional
+        },
+        {
+          gasLimit: 100_000,
+        }
+      );
+      console.log(tx);
+    } catch (error) {
+      console.log(error);
+    }
+  };
 
-//  try_query_single_invoice(1);
-//    try_query_single_contract(1)
-//   try_query_all_invoice();
+
+
+ //try_query_single_invoice(1);
+// try_query_single_contract(1)
+   //try_query_all_invoice();
 //  try_query_all_contract()
+
+//try_query_page_invoice(0, 5)
+
+try_query_admin_account()
  
 
  //add_new_invoice();
  //accept_invoice(1)
  //cancel_payment(1)
- withdraw_payment(1)
+ //withdraw_payment(1)
+ //change_admin_account()

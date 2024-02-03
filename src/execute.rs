@@ -4,7 +4,7 @@ use cosmwasm_std::{
 
 use secret_toolkit::utils::types::Token;
 
-use crate::state::{get_next_invoice_id, Contract, ContractStore, Invoice, InvoiceStore};
+use crate::state::{get_next_invoice_id, AdminStore, Contract, ContractStore, Invoice, InvoiceStore};
 
 pub struct Empty {}
 
@@ -14,7 +14,9 @@ pub fn new_invoice(
     _env: Env,
     info: MessageInfo,
     purpose: String,
-    amount: Uint128,
+    amount: u128,
+    admin_charge: Uint128,
+    customer_charge: Uint128,
     payer: String,
     days: u64,
     recurrent_time: Option<u64>,
@@ -35,6 +37,26 @@ pub fn new_invoice(
         None => 0,
     };
 
+    if admin_charge < Uint128::new(1) {
+        let error_message = format!(
+            "charge on payer must be greater than 0",
+        );
+    
+        return Err(StdError::generic_err(
+            error_message
+        ));
+    }
+
+    if customer_charge < Uint128::new(1) {
+        let error_message = format!(
+            "charge on payee must be greater than 0",
+        );
+    
+        return Err(StdError::generic_err(
+            error_message
+        ));
+    }
+
     let recurrent_status = match recurrent_time {
         Some(_time) => true,
         None => false,
@@ -46,7 +68,9 @@ pub fn new_invoice(
         invoice_id: next_invoice_id,
         receiver: receiver.to_string(),
         purpose: purpose,
-        amount: amount,
+        amount: amount.into(),
+        admin_charges: admin_charge,
+        customer_charges: customer_charge,
         payer: payer_address.to_string(),
         days: days,
         recurrent: Some(recurrent_status),
@@ -103,26 +127,59 @@ pub fn accept_invoice(deps: DepsMut, env: Env, info: MessageInfo, id: u64) -> St
 
     let mut amount = Uint128::zero();
 
+    let mut admin_withraw_amount = Uint128::zero();
+
+    // get admin wallet address
+    let admin_wallet = AdminStore::get_admin_wallet( deps.storage);
+
+    // validate admin wallet addres
+    let admin_wallet_validate = deps.api.addr_validate(admin_wallet.as_str())?;
+
+    let denom = "uscrt".to_string();
+
     if invoice.recurrent == Some(true) {
         let expected_amount = invoice.amount * Uint128::new(invoice.recurrent_times.into());
 
+        let total_admin_charges = invoice.admin_charges * Uint128::new(invoice.recurrent_times.into());
+
+        let total_expected_amount = expected_amount + total_admin_charges;
+
+        admin_withraw_amount = total_admin_charges;
+
         for coin in &info.funds {
             amount += coin.amount
         }
 
-        if amount < expected_amount {
+        if amount < total_expected_amount {
+            let error_message = format!(
+                "Amount {} is insufficient for recurrent payment in Invoice. Expected amount: {}",
+                amount, total_expected_amount
+            );
+        
             return Err(StdError::generic_err(
-                "Amount is insufficient for recurrent payment in Invoice",
+                error_message
             ));
         }
+
     } else {
+        let total_admin_charges_single = invoice.admin_charges;
+
+        let total_expected_amount_single = invoice.amount + total_admin_charges_single;
+
+        admin_withraw_amount = total_admin_charges_single;
+
         for coin in &info.funds {
             amount += coin.amount
         }
 
-        if amount < invoice.amount {
+        if amount < total_expected_amount_single {
+            let error_message = format!(
+                "Amount {} is insufficient for recurrent payment in Invoice. Expected amount: {}",
+                amount, total_expected_amount_single
+            );
+          
             return Err(StdError::generic_err(
-                "Amount is insufficient for single payment in Invoice",
+                error_message
             ));
         }
     }
@@ -136,7 +193,13 @@ pub fn accept_invoice(deps: DepsMut, env: Env, info: MessageInfo, id: u64) -> St
         None => 1,
     };
 
-    let account_balance = amount;
+    // transfer admin money to his wallet
+     CosmosMsg::<Empty>::Bank(BankMsg::Send {
+        to_address: admin_wallet_validate.to_string(),
+        amount: coins(admin_withraw_amount.into(), denom),
+    });
+
+    let account_balance = amount - admin_withraw_amount;
 
     let current_block_time = env.block.time.seconds();
     let day_in_timestamp = invoice.days * 86400;
@@ -314,11 +377,19 @@ pub fn withdraw_payment(
 
     let denom = "uscrt".to_string();
 
+    // get admin wallet address
+    let admin_wallet = AdminStore::get_admin_wallet( deps.storage);
+
+    // validate admin wallet addres
+    let admin_wallet_validate = deps.api.addr_validate(admin_wallet.as_str())?;
+
     if invoice.payment_condition == "half".to_string() {
         invoice.status = "done".to_string();
         invoice.remaining_time_of_payment = 0;
 
-        let amount_to_pay = invoice.amount / Uint128::new(2);
+        let changes = invoice.customer_charges;
+
+        let payee_payment = invoice.amount - changes;
 
         // save invoice changes
         InvoiceStore::save(deps.storage, &receiver, id, &invoice)?;
@@ -334,7 +405,13 @@ pub fn withdraw_payment(
         // employee receive their payment
         CosmosMsg::<Empty>::Bank(BankMsg::Send {
             to_address: receiver.to_string(),
-            amount: coins(amount_to_pay.into(), denom),
+            amount: coins(payee_payment.into(), denom.clone()),
+        });
+
+        // admin receive his changes
+        CosmosMsg::<Empty>::Bank(BankMsg::Send {
+            to_address: admin_wallet_validate.to_string(),
+            amount: coins(changes.into(), denom.clone()),
         });
 
         // save contract changes
@@ -351,7 +428,9 @@ pub fn withdraw_payment(
 
         invoice.remaining_time_of_payment = remaining_time_of_payment;
 
-        let amount_to_pay = invoice.amount.into();
+        let changes = invoice.customer_charges;
+
+        let payee_payment = invoice.amount - changes;
 
         // save invoice changes
         InvoiceStore::save(deps.storage, &receiver, id, &invoice)?;
@@ -367,7 +446,13 @@ pub fn withdraw_payment(
         // employee receive their payment
         CosmosMsg::<Empty>::Bank(BankMsg::Send {
             to_address: receiver.to_string(),
-            amount: coins(amount_to_pay, denom),
+            amount: coins(payee_payment.into(), denom.clone()),
+        });
+
+        // admin receive his changes
+        CosmosMsg::<Empty>::Bank(BankMsg::Send {
+            to_address: admin_wallet_validate.to_string(),
+            amount: coins(changes.into(), denom.clone()),
         });
 
         // save contract changes
@@ -377,3 +462,29 @@ pub fn withdraw_payment(
     deps.api.debug("invoice accepted successfully");
     Ok(Response::default())
 }
+
+pub fn admin_change_admin(deps: DepsMut, env: Env, info: MessageInfo, admin: String) -> StdResult<Response> {
+    // get the signer which is the payer
+    let sender = info.sender;
+
+    let admin_wallet = AdminStore::get_admin_wallet( deps.storage);
+
+    let admin_wallet_validate = deps.api.addr_validate(admin_wallet.as_str())?;
+
+    // check the signer ias admin
+    if sender != admin_wallet_validate {
+        return Err(StdError::generic_err(
+            "Admin role only",
+        ));
+    }
+
+    // validate new admin adress address
+    let new_admin_address = deps.api.addr_validate(admin.as_str())?;
+
+    //save new admin address
+    AdminStore::update_admin_wallet(deps.storage, &new_admin_address)?;
+
+    deps.api.debug("new admin save successfully");
+    Ok(Response::default())
+}
+

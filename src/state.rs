@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use cosmwasm_std::{Addr, StdResult, Storage, Uint128};
+use cosmwasm_std::{Addr, DepsMut, StdResult, Storage, Uint128};
 use secret_toolkit::serialization::Json;
 use secret_toolkit::storage::{Item, Keymap};
 use secret_toolkit::utils::types::Token;
@@ -15,6 +15,8 @@ pub struct Invoice {
     pub receiver: String,
     pub purpose: String,
     pub amount: Uint128,
+    pub admin_charges: Uint128,
+    pub customer_charges: Uint128,
     pub payer: String,
     pub days: u64,
     pub recurrent: Option<bool>,
@@ -46,6 +48,32 @@ pub fn get_next_invoice_id(storage: &mut dyn Storage) -> StdResult<u64> {
     INVOICE_ID.save(storage, &new_id)?;
 
     Ok(new_id)
+}
+
+const ADMIN_WALLET_ID: &[u8] = b"user_wallet";
+
+pub struct  AdminStore();
+
+impl AdminStore {
+    pub fn save_admin_wallet(storage: &mut dyn Storage, wallet_address: &Addr) -> StdResult<()> {
+        let address_str = wallet_address.as_str();
+        storage.set(ADMIN_WALLET_ID, address_str.as_bytes());
+        Ok(())
+    }
+
+    pub fn get_admin_wallet( storage: &dyn Storage) -> String {
+        let raw_address = storage.get(ADMIN_WALLET_ID).unwrap_or_default();
+        let wallet_address = String::from_utf8(raw_address).unwrap();
+
+        wallet_address
+    }
+
+    pub fn update_admin_wallet(storage: &mut dyn Storage, new_wallet_address: &Addr) -> StdResult<()> {
+        let new_address_str = new_wallet_address.as_str();
+        storage.set(ADMIN_WALLET_ID, new_address_str.as_bytes());
+        Ok(())
+    }
+    
 }
 
 pub static INVOICE: Keymap<u64, Invoice, Json> = Keymap::new(PREFIX_INVOICE);

@@ -5,16 +5,19 @@ use cosmwasm_std::{
 use crate::{
     execute,
     msg::{ExecuteMsg, InstantiateMsg, QueryMsg},
-    state::{ContractStore, InvoiceStore},
+    state::{AdminStore, ContractStore, InvoiceStore},
 };
 
 #[entry_point]
 pub fn instantiate(
-    _deps: DepsMut,
+    deps: DepsMut,
     _env: Env,
-    _info: MessageInfo,
+    info: MessageInfo,
     _msg: InstantiateMsg,
 ) -> StdResult<Response> {
+    let admin = info.sender;
+    AdminStore::save_admin_wallet(deps.storage, &admin)?;
+
     Ok(Response::default())
 }
 
@@ -24,6 +27,8 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
         ExecuteMsg::SubmitInvoice {
             purpose,
             amount,
+            admin_charge,
+            customer_charge,
             payer,
             days,
             recurrent_time,
@@ -34,6 +39,8 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
             info,
             purpose,
             amount,
+            admin_charge,
+            customer_charge,
             payer,
             days,
             recurrent_time,
@@ -42,6 +49,7 @@ pub fn execute(deps: DepsMut, env: Env, info: MessageInfo, msg: ExecuteMsg) -> S
         ExecuteMsg::AcceptInvoice { id } => execute::accept_invoice(deps, env, info, id),
         ExecuteMsg::CancelPayment { id } => execute::stop_contract(deps, env, info, id),
         ExecuteMsg::WithdrawPayment { id } => execute::withdraw_payment(deps, env, info, id),
+        ExecuteMsg::AdminUpdateAmin { newAdmin } => execute::admin_change_admin(deps, env, info, newAdmin)
     }
 }
 
@@ -80,6 +88,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             page,
             page_size,
         )?),
+        QueryMsg::AdmimWallet {  } => to_binary(
+            &AdminStore::get_admin_wallet( deps.storage)
+        )
     }
 }
 
@@ -122,7 +133,10 @@ mod tests {
 
         let exec_msg = ExecuteMsg::SubmitInvoice {
             purpose: "building".to_string(),
-            amount: Uint128::new(3),
+            //amount: Uint128::new(3),
+            amount: 3,
+            admin_charge: Uint128::new(3),
+            customer_charge: Uint128::new(3),
             payer: "secret1py4ryg3atyz5cru2m64p0mtga5y09q5a26pa7n".to_string(),
             days: 2,
             recurrent_time: Some(2),
@@ -179,7 +193,10 @@ mod tests {
 
         let exec_msg = ExecuteMsg::SubmitInvoice {
             purpose: "building".to_string(),
-            amount: Uint128::new(3),
+            //amount: Uint128::new(3),
+            amount: 3,
+            admin_charge: Uint128::new(3),
+            customer_charge: Uint128::new(3),
             payer: "secret1py4ryg3atyz5cru2m64p0mtga5y09q5a26pa7n".to_string(),
             days: 2,
             recurrent_time: Some(2),
@@ -269,7 +286,10 @@ mod tests {
 
         let exec_msg = ExecuteMsg::SubmitInvoice {
             purpose: "building".to_string(),
-            amount: Uint128::new(3),
+            //amount: Uint128::new(3),
+            amount: 3,
+            admin_charge: Uint128::new(3),
+            customer_charge: Uint128::new(3),
             payer: "secret1py4ryg3atyz5cru2m64p0mtga5y09q5a26pa7n".to_string(),
             days: 2,
             recurrent_time: Some(2),
